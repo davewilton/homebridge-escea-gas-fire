@@ -1,15 +1,33 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "EsceaGasFireHomebridgePlugin",
   "pluginType": "platform",
   "singular": true,
   "schema": {
     "type": "object",
     "properties": {
       "name": {
-        "title": "Name",
+        "title": "Name of fire",
         "type": "string",
         "required": true,
-        "default": "Example Dynamic Platform"
+        "default": ""
+      },
+      "username": {
+        "title": "This is the username to log into the fire directly, NOT the username for the app",
+        "type": "string",
+        "required": true,
+        "default": ""
+      },
+      "password": {
+        "title": "This is the password to log into the fire directly, NOT the username for the app",
+        "type": "string",
+        "required": true,
+        "default": ""
+      },
+      "ip": {
+        "title": "This is the password to log into the fire directly, NOT the username for the app",
+        "type": "string",
+        "required": true,
+        "default": ""
       }
     }
   }

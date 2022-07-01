@@ -1,9 +1,15 @@
 
-<p align="center">
 
-<img src="https://github.com/homebridge/branding/raw/master/logos/homebridge-wordmark-logo-vertical.png" width="150">
 
-</p>
+# IN PROGRESS
+
+Currently reading the status of fire not yet setting temp/turning it on
+
+
+TODO
+Turn on fire
+Set fire temperature
+
 
 
 # Homebridge Platform Plugin Template

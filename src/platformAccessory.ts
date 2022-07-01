@@ -1,13 +1,15 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
+import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Fire } from './escea/Fire';
 import { ExampleHomebridgePlatform } from './platform';
+
 
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
  * Each accessory may expose multiple services of different service types.
  */
-export class ExamplePlatformAccessory {
+export class EsceaFirePlatformAccessory {
   private service: Service;
 
   /**
@@ -16,23 +18,36 @@ export class ExamplePlatformAccessory {
    */
   private exampleStates = {
     On: false,
-    Brightness: 100,
+    TargetTemperature: 22,
+    HeatingThresholdTemperature: 22,
+    CurrentTemperature: 16,
+    Active: this.platform.Characteristic.Active.INACTIVE,
   };
+
+  private cookie: { value: string; expires: Date } = {
+    value: '',
+    expires: new Date(Date.now()),
+  };
+
 
   constructor(
     private readonly platform: ExampleHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
+    public readonly ipAddress: string,
+    public readonly username: string,
+    public readonly password: string,
   ) {
 
     // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Escea')
+      .setCharacteristic(this.platform.Characteristic.Model, 'Gas Fire')
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'NA');
 
     // get the LightBulb service if it exists, otherwise create a new LightBulb service
     // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+    this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+    this.accessory.addService(this.platform.Service.HeaterCooler);
 
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
@@ -41,101 +56,240 @@ export class ExamplePlatformAccessory {
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
 
+
+    // create handlers for required characteristics
+    this.service.getCharacteristic(this.platform.Characteristic.Active)
+      .onGet(this.handleActiveGet.bind(this))
+      .onSet(this.handleActiveSet.bind(this));
+
     // register handlers for the On/Off Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .onGet(this.getOn.bind(this));               // GET - bind to the `getOn` method below
+      .onSet(this.setOn.bind(this))             // SET - bind to the `setOn` method below
+      .onGet(this.getOn.bind(this));             // GET - bind to the `getOn` method below
 
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .onSet(this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onSet(this.setTargetTemperature.bind(this))
+      .onGet(this.getTargetTemperature.bind(this));
 
-    /**
-     * Creating multiple services of the same type.
-     *
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     *
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
-     */
 
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .onSet(this.setCurrentTemperature.bind(this))
+      .onGet(this.getCurrentTemperature.bind(this));
 
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
 
-    /**
-     * Updating characteristics values asynchronously.
-     *
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     *
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
+    // without this it won't show the temperature dial in iOS
+    this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+      .onSet(this.setHeatingThresholdTemperature.bind(this))
+      .onGet(this.getHeatingThresholdTemperature.bind(this));
 
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
 
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
+    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState,
+      this.platform.Characteristic.AccessCodeControlPoint.CurrentHeatingCoolingState.HEAT);
+
+    this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState,
+      this.platform.Characteristic.AccessCodeControlPoint.TargetHeaterCoolerState.HEAT);
+
+
+    // once per min we re-check the status. Use get or continue with timeout?
+    setInterval(async () => {
+      this.updateOnStatus();
     }, 10000);
+    this.updateOnStatus();
+  }
+
+  async updateOnStatus() {
+    // push the new value to HomeKit
+
+    const fire = new Fire(this.ipAddress);
+    fire.getStatus().then(status =>{
+      this.exampleStates.On = status.status;
+      if(status.status){
+        this.exampleStates.Active = this.platform.Characteristic.Active.ACTIVE;
+      }else{
+        this.exampleStates.Active = this.platform.Characteristic.Active.INACTIVE;
+      }
+      this.exampleStates.CurrentTemperature = status.roomTemp;
+      this.exampleStates.TargetTemperature = status.desiredTemp;
+      this.exampleStates.HeatingThresholdTemperature = status.desiredTemp;
+
+      this.service.updateCharacteristic(this.platform.Characteristic.On, status.status);
+      this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, status.roomTemp);
+      this.service.updateCharacteristic(this.platform.Characteristic.TargetTemperature, status.desiredTemp);
+      this.service.updateCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature, status.desiredTemp);
+
+      this.platform.log.debug('updateOnStatus ->', status);
+    });
+
+  }
+
+
+  /**
+   * Handle requests to get the current value of the "Active" characteristic
+   */
+  handleActiveGet() {
+    this.platform.log.debug('Get Characteristic handleActiveGet ->', this.exampleStates.Active);
+
+    return this.exampleStates.Active;
   }
 
   /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
+     * Handle requests to set the "Active" characteristic
+     */
+  handleActiveSet(value) {
+    this.platform.log.debug('Set handleActiveSet On ->', value);
+    this.exampleStates.Active = value;
+  }
+
+
+
   async setOn(value: CharacteristicValue) {
+    this.platform.log.debug('Set Characteristic On ->', value);
     // implement your own code to turn your device on/off
     this.exampleStates.On = value as boolean;
-
-    this.platform.log.debug('Set Characteristic On ->', value);
   }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   *
-   * GET requests should return as fast as possbile. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   *
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
   async getOn(): Promise<CharacteristicValue> {
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
-
-    this.platform.log.debug('Get Characteristic On ->', isOn);
-
-    // if you need to return an error to show the device as "Not Responding" in the Home app:
-    // throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
-
-    return isOn;
+    this.platform.log.debug('EsceaFirePlatformAccessory:: getOn:', this.ipAddress);
+    return this.exampleStates.On;
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  async setBrightness(value: CharacteristicValue) {
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+  async setTargetTemperature(value: CharacteristicValue) {
+    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
+    // implement your own code to turn your device on/off
+    this.exampleStates.TargetTemperature = value as number;
+  }
 
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
+  async getTargetTemperature() {
+    return this.exampleStates.TargetTemperature;
+  }
+
+  async setCurrentTemperature(value: CharacteristicValue) {
+    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
+    // implement your own code to turn your device on/off
+    this.exampleStates.CurrentTemperature = value as number;
+  }
+
+  async getCurrentTemperature() {
+    this.platform.log.debug('Set CurrentTemperature::', this.exampleStates.CurrentTemperature);
+    return this.exampleStates.CurrentTemperature;
+  }
+
+  async setHeatingThresholdTemperature(value: CharacteristicValue) {
+    this.platform.log.debug('Set HeatingThresholdTemperature::', value);
+    // implement your own code to turn your device on/off
+    this.exampleStates.HeatingThresholdTemperature = value as number;
+  }
+
+  async getHeatingThresholdTemperature() {
+    this.platform.log.debug('get HeatingThresholdTemperature::', this.exampleStates.HeatingThresholdTemperature);
+    return this.exampleStates.HeatingThresholdTemperature;
   }
 
 }
+
+
+// old code tried doing it with html page but was flaky and crashed fire
+
+// async getOn(): Promise<CharacteristicValue> {
+
+//   this.platform.log.debug('EsceaFirePlatformAccessory:: getOn:', this.ipAddress);
+
+
+//   return new Promise((resolve, reject) => {
+
+//     this.getCookie().then(cookie => {
+//       const config = {
+//         headers: {
+//           'Cookie': 'token=' + cookie,
+//         },
+//       };
+//       axios.post(this.ipAddress, null, config)
+//         .then((res) => {
+//           const htmlText: string = res.data;
+//           this.platform.log.debug('status resp === ' + htmlText);
+//           const status = htmlText.indexOf('name="ON_OFF_SWITCH" value="Off" checked') > -1;
+//           this.platform.log.debug('status === ' + !status);
+//           resolve(!status);
+//         }).catch((err) => {
+//           this.platform.log.error(err);
+//           reject(false);
+//         });
+//     }, () => {
+//       this.platform.log.error('error getting cookie');
+//     });
+
+//   });
+
+// }
+
+// async getCookie() {
+
+//   // if the cookie is still valid use it
+//   if (this.cookie && this.cookie.value && this.cookie.expires.getTime() > Date.now()) {
+//     return this.cookie.value;
+//   }
+
+//   const user = MD5(this.username);
+//   const pass = MD5(this.password);
+
+//   const data = `user=${user}&password=${pass}`;
+
+//   this.platform.log.debug('getting new cookie');
+
+//   return new Promise((resolve, reject) => {
+
+//     axios.post(this.ipAddress + 'doLogin.html', data)
+//       .then((res) => {
+//         const htmlText: string = res.data;
+//         this.platform.log.debug('cookie response === ' + htmlText);
+
+//         const textToFind1 = '<input type="text" name="token" id="token" value=';
+//         const textToFind2 = 'maxlength="40" size="40"/></form>';
+//         let cookie = htmlText.slice(htmlText.indexOf(textToFind1) + textToFind1.length, htmlText.indexOf(textToFind2));
+//         cookie = cookie.replace('"', '').replace('"', '').trim();
+//         this.platform.log.debug('cookie === ' + cookie);
+//         this.cookie.value = cookie;
+//         const date = new Date();
+//         date.setMinutes(date.getMinutes() + 360);
+//         this.cookie.expires = date; // store cookie for 360 min. This is what the web page does
+//         resolve(cookie);
+//       }).catch((err) => {
+//         reject();
+//         this.cookie.value = '';
+//         this.platform.log.error(err);
+//       });
+//   });
+// }
+
+
+// /**
+//  * Handle "SET" requests from HomeKit
+//  * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
+//  */
+//  async setOn(value: CharacteristicValue) {
+
+//   // implement your own code to turn your device on/off
+//   this.exampleStates.On = value as boolean;
+
+//   this.platform.log.debug('Set Characteristic On ->', value);
+
+//   const valueStr = value ? 'on' : 'off';
+
+//   const data = 'ON_OFF_SWITCH=' + valueStr;
+
+//   const cookie = await this.getCookie();
+
+//   // implement your own code to check if the device is on
+//   const config = {
+//     headers: {
+//       'Cookie': 'token=' + cookie,
+//     },
+//   };
+//   axios.post(this.ipAddress, data, config)
+//     .then((res) => {
+//       const htmlText: string = res.data;
+//       this.platform.log.debug('setOn status resp === ' + htmlText);
+//     }).catch((err) => {
+//       this.platform.log.error(err);
+//     });
+// }
