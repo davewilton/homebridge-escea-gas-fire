@@ -9,22 +9,10 @@
         "title": "Name of fire",
         "type": "string",
         "required": true,
-        "default": ""
-      },
-      "username": {
-        "title": "This is the username to log into the fire directly, NOT the username for the app",
-        "type": "string",
-        "required": true,
-        "default": ""
-      },
-      "password": {
-        "title": "This is the password to log into the fire directly, NOT the username for the app",
-        "type": "string",
-        "required": true,
-        "default": ""
+        "default": "Escea Gas Fire"
       },
       "ip": {
-        "title": "This is the password to log into the fire directly, NOT the username for the app",
+        "title": "This is the IP address of the fire e.g. 192.168.0.12",
         "type": "string",
         "required": true,
         "default": ""

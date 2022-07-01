@@ -94,7 +94,8 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
         this.log.info('Adding new accessory:', device.exampleDisplayName);
 
         // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
+        const name = this.config.name ? this.config.name : 'EsceaGasFire';
+        const accessory = new this.api.platformAccessory(name, uuid);
 
         // store a copy of the device object in the `accessory.context`
         // the `context` property can be used to store any data about the accessory you may need
