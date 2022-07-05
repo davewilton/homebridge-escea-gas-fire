@@ -13,28 +13,28 @@ export class Fire {
   private sendRequest(message: string): Promise<Buffer> {
 
     return new Promise((resolve, reject) => {
-      const server = dgram.createSocket('udp4');
 
-      server.on('message', (msg, rinfo) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const res: any = msg;
-        const m = Buffer.from(res, 'hex');
-        console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
-        resolve(m);
-      });
+      try {
 
-      server.bind(this.UDP_PORT);
+        const server = dgram.createSocket('udp4');
 
-      const m = Buffer.from(message, 'hex');
-      server.send(m, this.UDP_PORT, this.ip, () =>{
-        //server.close();
-      });
+        server.on('message', (msg, rinfo) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const res: any = msg;
+          const m = Buffer.from(res, 'hex');
+          console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
+          resolve(m);
+          server.close();
+        });
 
-      // any longer than seconds close it
-      setTimeout(() => {
-        server.close();
-        reject('timeout');
-      }, 1000);
+        server.bind(this.UDP_PORT);
+
+        const m = Buffer.from(message, 'hex');
+        server.send(m, this.UDP_PORT, this.ip);
+
+      } catch (error) {
+        reject(error);
+      }
     });
 
   }
@@ -53,48 +53,48 @@ export class Fire {
           readBufferAsInt(m, 8, 9),
         );
         resolve(status);
-      }, (e)=>{
+      }, (e) => {
         reject(e);
       });
     });
   }
 
-  setOn(){
+  setOn() {
     return new Promise((resolve, reject) => {
       const POWER_ON = '473900000000000000000000003146';
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
-      }, (e)=>{
+      }, (e) => {
         console.log(e);
         reject(false);
       });
     });
   }
 
-  setOff(){
+  setOff() {
     return new Promise((resolve, reject) => {
       const POWER_ON = '473A00000000000000000000003146';
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
-      }, (e)=>{
+      }, (e) => {
         console.log(e);
         reject(false);
       });
     });
   }
 
-  setTemp(temp: number){
+  setTemp(temp: number) {
     console.log('set temp');
     temp = Math.ceil(temp); // must be an int
     return new Promise((resolve, reject) => {
-      if(temp < 10 || temp > 31){
+      if (temp < 10 || temp > 31) {
         resolve(false); // outside range
       }
       temp = decimalToHexString(temp);
       const SET_TEMP = `475701${temp}0000000000000000003146`;
       this.sendRequest(SET_TEMP).then(() => {
         resolve(true);
-      }, (e)=>{
+      }, (e) => {
         console.log(e);
         reject(false);
       });
@@ -104,6 +104,6 @@ export class Fire {
 
 class FireStatus {
   constructor(public status: boolean, public fanBoost: boolean, public flameEffect: boolean,
-    public desiredTemp: number, public roomTemp: number){
+    public desiredTemp: number, public roomTemp: number) {
   }
 }

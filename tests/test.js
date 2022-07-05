@@ -57,6 +57,7 @@ server.on('message', (msg, rinfo) => {
   console.log('Desired temperature is ' +readBufferAsInt(m, 7, 8));
   console.log('Room temperature is ' + readBufferAsInt(m, 8, 9));
   console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
+  server.close();
 });
 
 server.on('listening', () => {
@@ -66,23 +67,23 @@ server.on('listening', () => {
 
 server.bind(UDP_PORT);
 
-// const m = Buffer.from(STATUS_PLEASE, 'hex');
-// server.send(m, UDP_PORT, ip);
+const m = Buffer.from(STATUS_PLEASE, 'hex');
+server.send(m, UDP_PORT, ip);
 
-const setTemp= (temp)=>{
-  temp = Math.ceil(temp); // must be an int
-  if(temp < 3 || temp > 31){
-    resolve(false); // outside range
-  }
-  temp = temp -6; // how do you convert this to the correct hex? -6 works
-  const POWER_ON = `475701${temp}0000000000000000003146`;
-  console.log(POWER_ON);
-  const m = Buffer.from(POWER_ON, 'hex');
-  server.send(m, UDP_PORT, ip);
-};
-console.log('setTemp');
-setTemp(22);
+// const setTemp= (temp)=>{
+//   temp = Math.ceil(temp); // must be an int
+//   if(temp < 3 || temp > 31){
+//     resolve(false); // outside range
+//   }
+//   temp = temp -6; // how do you convert this to the correct hex? -6 works
+//   const POWER_ON = `475701${temp}0000000000000000003146`;
+//   console.log(POWER_ON);
+//   const m = Buffer.from(POWER_ON, 'hex');
+//   server.send(m, UDP_PORT, ip);
+// };
+// console.log('setTemp');
+// setTemp(22);
 
-setTimeout(()=>{
-  server.close();
-}, 1000);
+// setTimeout(()=>{
+//   server.close();
+// }, 1000);
