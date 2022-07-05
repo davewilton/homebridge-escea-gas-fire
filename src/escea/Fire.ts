@@ -21,6 +21,7 @@ export class Fire {
         const m = Buffer.from(res, 'hex');
         console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
         resolve(m);
+        server.close();
       });
 
       server.bind(this.UDP_PORT);
@@ -30,11 +31,11 @@ export class Fire {
         //server.close();
       });
 
-      // any longer than seconds close it
-      setTimeout(() => {
-        server.close();
-        reject('timeout');
-      }, 1000);
+      // // any longer than seconds close it
+      // setTimeout(() => {
+      //  // server.close();
+      //  // reject('timeout');
+      // }, 1000);
     });
 
   }
