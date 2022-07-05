@@ -9,3 +9,7 @@ export const readBufferAsBool = (buffer, start, end)=>{
 export const readBufferAsStr = (buffer, start, end)=>{
   return buffer.slice(start, end).toString();
 };
+
+export const decimalToHexString = (number)=>{
+  return number.toString(16).toUpperCase();
+};

@@ -12,10 +12,6 @@ import { ExampleHomebridgePlatform } from './platform';
 export class EsceaFirePlatformAccessory {
   private service: Service;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
   private exampleStates = {
     On: false,
     TargetTemperature: 22,
@@ -24,10 +20,7 @@ export class EsceaFirePlatformAccessory {
     Active: this.platform.Characteristic.Active.INACTIVE,
   };
 
-  private cookie: { value: string; expires: Date } = {
-    value: '',
-    expires: new Date(Date.now()),
-  };
+  fire: Fire;
 
 
   constructor(
@@ -49,6 +42,9 @@ export class EsceaFirePlatformAccessory {
     this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
     this.accessory.addService(this.platform.Service.HeaterCooler);
 
+    // create the fire
+    this.fire = new Fire(this.ipAddress);
+
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
@@ -58,20 +54,18 @@ export class EsceaFirePlatformAccessory {
 
 
     // create handlers for required characteristics
+
+    // this is on/off
     this.service.getCharacteristic(this.platform.Characteristic.Active)
       .onGet(this.handleActiveGet.bind(this))
       .onSet(this.handleActiveSet.bind(this));
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this))             // SET - bind to the `setOn` method below
-      .onGet(this.getOn.bind(this));             // GET - bind to the `getOn` method below
-
+    // this is the temp the fire is set to
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onSet(this.setTargetTemperature.bind(this))
       .onGet(this.getTargetTemperature.bind(this));
 
-
+    // room temp C
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onSet(this.setCurrentTemperature.bind(this))
       .onGet(this.getCurrentTemperature.bind(this));
@@ -99,15 +93,20 @@ export class EsceaFirePlatformAccessory {
 
   async updateOnStatus() {
     // push the new value to HomeKit
-
-    const fire = new Fire(this.ipAddress);
-    fire.getStatus().then(status =>{
+    this.fire.getStatus().then(status =>{
       this.exampleStates.On = status.status;
       if(status.status){
         this.exampleStates.Active = this.platform.Characteristic.Active.ACTIVE;
       }else{
         this.exampleStates.Active = this.platform.Characteristic.Active.INACTIVE;
       }
+
+      // update the temp
+      if(this.exampleStates.HeatingThresholdTemperature !== status.desiredTemp){
+        this.platform.log.debug('Updating  HeatingThresholdTemperature ->', status.desiredTemp);
+        this.fire.setTemp(this.exampleStates.HeatingThresholdTemperature as number);
+      }
+
       this.exampleStates.CurrentTemperature = status.roomTemp;
       this.exampleStates.TargetTemperature = status.desiredTemp;
       this.exampleStates.HeatingThresholdTemperature = status.desiredTemp;
@@ -128,30 +127,18 @@ export class EsceaFirePlatformAccessory {
    */
   handleActiveGet() {
     this.platform.log.debug('Get Characteristic handleActiveGet ->', this.exampleStates.Active);
-
     return this.exampleStates.Active;
   }
 
   /**
-     * Handle requests to set the "Active" characteristic
+     * Handle requests to set the "Active" characteristic (this is on/of 1/0)
      */
   handleActiveSet(value) {
     this.platform.log.debug('Set handleActiveSet On ->', value);
+    value ? this.fire.setOn() : this.fire.setOff();
     this.exampleStates.Active = value;
   }
 
-
-
-  async setOn(value: CharacteristicValue) {
-    this.platform.log.debug('Set Characteristic On ->', value);
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
-  }
-
-  async getOn(): Promise<CharacteristicValue> {
-    this.platform.log.debug('EsceaFirePlatformAccessory:: getOn:', this.ipAddress);
-    return this.exampleStates.On;
-  }
 
   async setTargetTemperature(value: CharacteristicValue) {
     this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
@@ -170,13 +157,13 @@ export class EsceaFirePlatformAccessory {
   }
 
   async getCurrentTemperature() {
-    this.platform.log.debug('Set CurrentTemperature::', this.exampleStates.CurrentTemperature);
+    this.platform.log.debug('get CurrentTemperature::', this.exampleStates.CurrentTemperature);
     return this.exampleStates.CurrentTemperature;
   }
 
   async setHeatingThresholdTemperature(value: CharacteristicValue) {
     this.platform.log.debug('Set HeatingThresholdTemperature::', value);
-    // implement your own code to turn your device on/off
+    // This will get changed in the interval
     this.exampleStates.HeatingThresholdTemperature = value as number;
   }
 
