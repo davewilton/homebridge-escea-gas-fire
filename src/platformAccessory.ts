@@ -39,7 +39,7 @@ export class EsceaFirePlatformAccessory {
 
     // get the LightBulb service if it exists, otherwise create a new LightBulb service
     // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
+    this.service = this.accessory.getService(this.platform.Service) ||
     this.accessory.addService(this.platform.Service.HeaterCooler);
 
     // create the fire
