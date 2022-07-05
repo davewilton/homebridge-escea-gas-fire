@@ -11,6 +11,7 @@ import { ExampleHomebridgePlatform } from './platform';
  */
 export class EsceaFirePlatformAccessory {
   private service: Service;
+  private serviceSwitch: Service;
 
   private exampleStates = {
     On: false,
@@ -36,10 +37,13 @@ export class EsceaFirePlatformAccessory {
       .setCharacteristic(this.platform.Characteristic.Model, 'Gas Fire')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'NA');
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
+    // get the  service if it exists, otherwise create a new  service
     // you can create multiple services for each accessory
     this.service = this.accessory.getService(this.platform.Service.Thermostat) ||
     this.accessory.addService(this.platform.Service.Thermostat);
+
+    this.serviceSwitch = this.accessory.getService(this.platform.Service.Switch) ||
+    this.accessory.addService(this.platform.Service.Switch);
 
     // create the fire
     this.fire = new Fire(this.ipAddress);
@@ -53,6 +57,9 @@ export class EsceaFirePlatformAccessory {
 
 
     // create handlers for required characteristics
+    this.service.getCharacteristic(this.platform.Characteristic.On)
+      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
+
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
 
@@ -108,6 +115,25 @@ export class EsceaFirePlatformAccessory {
 
     });
 
+  }
+
+
+
+  /**
+   * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
+   */
+  handleCurrentOnStateGet() {
+    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState');
+
+    return 1;
+  }
+
+
+  /**
+   * Handle requests to get the current value of the "Target Heating Cooling State" characteristic
+   */
+  handleCurrentOnStateSet() {
+    return 1;
   }
 
   /**
