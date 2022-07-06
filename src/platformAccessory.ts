@@ -30,8 +30,6 @@ export class EsceaFirePlatformAccessory {
     private readonly platform: ExampleHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
     public readonly ipAddress: string,
-    public readonly username: string,
-    public readonly password: string,
   ) {
 
     // set accessory information

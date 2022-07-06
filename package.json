@@ -1,5 +1,5 @@
 {
-  "private": true,
+  "private": false,
   "displayName": "Escea Gas Fire",
   "name": "homebridge-escea-gas-fire",
   "version": "1.0.0",
