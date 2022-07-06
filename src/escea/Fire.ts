@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+import { rejects } from 'node:assert';
 import dgram from 'node:dgram';
 import { decimalToHexString, readBufferAsBool, readBufferAsInt } from './Util';
 
@@ -13,35 +14,31 @@ export class Fire {
   private sendRequest(message: string): Promise<Buffer> {
 
     return new Promise((resolve, reject) => {
-      const server = dgram.createSocket('udp4');
+      try {
 
-      server.on('message', (msg, rinfo) => {
+        const server = dgram.createSocket('udp4');
+
+        server.on('message', (msg) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const res: any = msg;
-        const m = Buffer.from(res, 'hex');
-        console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
-        resolve(m);
-        server.close();
-      });
+          const res: any = msg;
+          const m = Buffer.from(res, 'hex');
+          resolve(m);
+          server.close();
+        });
 
-      server.bind(this.UDP_PORT);
+        server.bind(this.UDP_PORT);
 
-      const m = Buffer.from(message, 'hex');
-      server.send(m, this.UDP_PORT, this.ip, () =>{
-        //server.close();
-      });
+        const m = Buffer.from(message, 'hex');
+        server.send(m, this.UDP_PORT, this.ip);
 
-      // // any longer than seconds close it
-      // setTimeout(() => {
-      //  // server.close();
-      //  // reject('timeout');
-      // }, 1000);
+      } catch (error) {
+        reject(error);
+      }
     });
 
   }
 
   getStatus(): Promise<FireStatus> {
-    console.log('getStatus');
     return new Promise((resolve, reject) => {
       const STATUS_PLEASE = '473100000000000000000000003146';
       this.sendRequest(STATUS_PLEASE).then((m) => {
@@ -55,6 +52,7 @@ export class Fire {
         );
         resolve(status);
       }, (e)=>{
+        console.error(e);
         reject(e);
       });
     });
@@ -66,7 +64,7 @@ export class Fire {
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
       }, (e)=>{
-        console.log(e);
+        console.error(e);
         reject(false);
       });
     });
@@ -78,7 +76,7 @@ export class Fire {
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
       }, (e)=>{
-        console.log(e);
+        console.error(e);
         reject(false);
       });
     });
