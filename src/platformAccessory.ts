@@ -1,5 +1,5 @@
 
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Service, PlatformAccessory } from 'homebridge';
 import { Fire } from './escea/Fire';
 import { ExampleHomebridgePlatform } from './platform';
 
@@ -11,23 +11,19 @@ import { ExampleHomebridgePlatform } from './platform';
  */
 export class EsceaFirePlatformAccessory {
   private service: Service;
+  private tempService: Service;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
   private exampleStates = {
     On: false,
-    TargetTemperature: 22,
-    HeatingThresholdTemperature: 22,
+    TargetHeatingCoolingState: 0,
+    CurrentHeatingCoolingState: 0,
+    TargetTemperature: 16,
     CurrentTemperature: 16,
     Active: this.platform.Characteristic.Active.INACTIVE,
   };
 
-  private cookie: { value: string; expires: Date } = {
-    value: '',
-    expires: new Date(Date.now()),
-  };
+  fire: Fire;
+  statusPoll!: NodeJS.Timer;
 
 
   constructor(
@@ -44,147 +40,196 @@ export class EsceaFirePlatformAccessory {
       .setCharacteristic(this.platform.Characteristic.Model, 'Gas Fire')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'NA');
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
+    // get the  service if it exists, otherwise create a new  service
     // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.HeaterCooler) ||
-    this.accessory.addService(this.platform.Service.HeaterCooler);
+    this.service = this.accessory.getService(this.platform.Service.Thermostat) ||
+    this.accessory.addService(this.platform.Service.Thermostat);
+
+    // add a second temperature sensort service. The reason for this is that it allows you to
+    // use the temperature sensor along with automations to turn the fire on.
+    this.tempService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
+    this.accessory.addService(this.platform.Service.TemperatureSensor);
+
+    // create the fire
+    this.fire = new Fire(this.ipAddress);
 
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
+    // see https://developers.homebridge.io/#/service/Thermostat
 
 
     // create handlers for required characteristics
-    this.service.getCharacteristic(this.platform.Characteristic.Active)
-      .onGet(this.handleActiveGet.bind(this))
-      .onSet(this.handleActiveSet.bind(this));
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this))
+      .onSet(this.handleCurrentHeatingCoolingStateSet.bind(this));
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .onSet(this.setOn.bind(this))             // SET - bind to the `setOn` method below
-      .onGet(this.getOn.bind(this));             // GET - bind to the `getOn` method below
-
-    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
-      .onSet(this.setTargetTemperature.bind(this))
-      .onGet(this.getTargetTemperature.bind(this));
-
+    // this is what the button on/off will actually set
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
+      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .onSet(this.setCurrentTemperature.bind(this))
-      .onGet(this.getCurrentTemperature.bind(this));
+      .onGet(this.handleCurrentTemperatureGet.bind(this));
 
 
-    // without this it won't show the temperature dial in iOS
-    this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-      .onSet(this.setHeatingThresholdTemperature.bind(this))
-      .onGet(this.getHeatingThresholdTemperature.bind(this));
+    this.tempService.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(this.handleTargetTemperatureGet.bind(this));
+
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
 
 
-    this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState,
-      this.platform.Characteristic.AccessCodeControlPoint.CurrentHeatingCoolingState.HEAT);
+    // nothing has been done with changing display units but it is required
+    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+      .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
+      .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
 
-    this.service.updateCharacteristic(this.platform.Characteristic.TargetHeaterCoolerState,
-      this.platform.Characteristic.AccessCodeControlPoint.TargetHeaterCoolerState.HEAT);
+
+    // we don't want the cooling options
+    // https://github.com/homebridge/homebridge/issues/2239
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .setProps({
+        maxValue: this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
+        minValue: this.platform.Characteristic.TargetHeatingCoolingState.OFF,
+        validValues: [ this.platform.Characteristic.TargetHeatingCoolingState.HEAT,
+          this.platform.Characteristic.TargetHeatingCoolingState.OFF,
+        ],
+      });
+
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .setProps({
+        minValue: 4,
+        maxValue: 40,
+      });
 
 
-    // once per min we re-check the status. Use get or continue with timeout?
-    setInterval(async () => {
+    // Poll the fire for status updates from other devices (app or remote control)
+    this.statusPoll = setInterval(async () => {
       this.updateOnStatus();
-    }, 10000);
+    }, 30000);
     this.updateOnStatus();
+
+    // Stop the intervals on Homebridge shutdown
+    this.platform.api.on('shutdown', () => {
+      clearInterval(this.statusPoll);
+    });
   }
 
   async updateOnStatus() {
     // push the new value to HomeKit
+    this.fire.getStatus().then(status =>{
+      //this.platform.log.debug('updateOnStatus ->', status);
 
-    const fire = new Fire(this.ipAddress);
-    fire.getStatus().then(status =>{
-      this.exampleStates.On = status.status;
-      if(status.status){
-        this.exampleStates.Active = this.platform.Characteristic.Active.ACTIVE;
-      }else{
-        this.exampleStates.Active = this.platform.Characteristic.Active.INACTIVE;
+      // check the state of the fire if it has been changed externallu
+      const targetState = this.exampleStates.TargetHeatingCoolingState === 1;
+      if(status.status !==targetState){
+        this.exampleStates.TargetHeatingCoolingState = status.status ? 1 : 0;
+        this.platform.log.debug('update TargetHeatingCoolingState from fire ->', this.exampleStates.TargetHeatingCoolingState);
+        this.service.updateCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState,
+          this.exampleStates.TargetHeatingCoolingState);
       }
+
+      // could have been changed on the remote control/another app
+      if(this.exampleStates.TargetTemperature !== status.desiredTemp){
+        this.platform.log.debug('update TargetTemperature from fire ->', status.desiredTemp);
+        this.exampleStates.TargetTemperature = status.desiredTemp;
+        this.service.updateCharacteristic(this.platform.Characteristic.TargetTemperature, status.desiredTemp);
+      }
+
+      // room temp
       this.exampleStates.CurrentTemperature = status.roomTemp;
-      this.exampleStates.TargetTemperature = status.desiredTemp;
-      this.exampleStates.HeatingThresholdTemperature = status.desiredTemp;
-
-      this.service.updateCharacteristic(this.platform.Characteristic.On, status.status);
       this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, status.roomTemp);
-      this.service.updateCharacteristic(this.platform.Characteristic.TargetTemperature, status.desiredTemp);
-      this.service.updateCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature, status.desiredTemp);
+      this.tempService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, status.roomTemp);
 
-      this.platform.log.debug('updateOnStatus ->', status);
     });
 
   }
 
 
+
   /**
-   * Handle requests to get the current value of the "Active" characteristic
+   * Handle requests to get the current value of the "Target Heating Cooling State" characteristic
    */
-  handleActiveGet() {
-    this.platform.log.debug('Get Characteristic handleActiveGet ->', this.exampleStates.Active);
-
-    return this.exampleStates.Active;
+  handleTargetHeatingCoolingStateGet() {
+    this.platform.log.debug('Triggered GET TargetHeatingCoolingState', this.exampleStates.TargetHeatingCoolingState);
+    return this.exampleStates.TargetHeatingCoolingState;
   }
 
   /**
-     * Handle requests to set the "Active" characteristic
-     */
-  handleActiveSet(value) {
-    this.platform.log.debug('Set handleActiveSet On ->', value);
-    this.exampleStates.Active = value;
+   * Handle requests to set the "Target Heating Cooling State" characteristic
+   */
+  handleTargetHeatingCoolingStateSet(value) {
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState', value);
+    if(value === 1){
+      this.fire.setOn();
+    }else{
+      this.fire.setOff();
+    }
+    this.exampleStates.TargetHeatingCoolingState = value;
+  }
+
+  /**
+   * Handle requests to get the current value of the "Current Heating Cooling State" characteristic
+   */
+  handleCurrentHeatingCoolingStateGet() {
+    this.platform.log.debug('Triggered GET CurrentHeatingCoolingState', this.exampleStates.CurrentHeatingCoolingState);
+    return this.exampleStates.CurrentHeatingCoolingState;
+  }
+
+  /**
+   * Handle requests to set the "Current Heating Cooling State" characteristic
+   */
+  handleCurrentHeatingCoolingStateSet(value) {
+    this.platform.log.debug('Triggered SET TargetHeatingCoolingState', value);
+    this.exampleStates.CurrentHeatingCoolingState = value;
   }
 
 
-
-  async setOn(value: CharacteristicValue) {
-    this.platform.log.debug('Set Characteristic On ->', value);
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
-  }
-
-  async getOn(): Promise<CharacteristicValue> {
-    this.platform.log.debug('EsceaFirePlatformAccessory:: getOn:', this.ipAddress);
-    return this.exampleStates.On;
-  }
-
-  async setTargetTemperature(value: CharacteristicValue) {
-    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
-    // implement your own code to turn your device on/off
-    this.exampleStates.TargetTemperature = value as number;
-  }
-
-  async getTargetTemperature() {
-    return this.exampleStates.TargetTemperature;
-  }
-
-  async setCurrentTemperature(value: CharacteristicValue) {
-    this.platform.log.debug('Set Characteristic TargetTemperature ->', value);
-    // implement your own code to turn your device on/off
-    this.exampleStates.CurrentTemperature = value as number;
-  }
-
-  async getCurrentTemperature() {
-    this.platform.log.debug('Set CurrentTemperature::', this.exampleStates.CurrentTemperature);
+  /**
+   * Handle requests to get the current value of the "Current Temperature" characteristic
+   */
+  handleCurrentTemperatureGet() {
+    this.platform.log.debug('Triggered GET CurrentTemperature', this.exampleStates.CurrentTemperature);
     return this.exampleStates.CurrentTemperature;
   }
 
-  async setHeatingThresholdTemperature(value: CharacteristicValue) {
-    this.platform.log.debug('Set HeatingThresholdTemperature::', value);
-    // implement your own code to turn your device on/off
-    this.exampleStates.HeatingThresholdTemperature = value as number;
+
+  /**
+   * Handle requests to get the current value of the "Target Temperature" characteristic
+   */
+  handleTargetTemperatureGet() {
+    this.platform.log.debug('Triggered GET TargetTemperature', this.exampleStates.TargetTemperature);
+    return this.exampleStates.TargetTemperature;
   }
 
-  async getHeatingThresholdTemperature() {
-    this.platform.log.debug('get HeatingThresholdTemperature::', this.exampleStates.HeatingThresholdTemperature);
-    return this.exampleStates.HeatingThresholdTemperature;
+  /**
+   * Handle requests to set the "Target Temperature" characteristic
+   */
+  handleTargetTemperatureSet(value) {
+    this.platform.log.debug('Triggered SET TargetTemperature:', value);
+    this.exampleStates.TargetTemperature = value;
+    this.fire.setTemp(this.exampleStates.TargetTemperature as number);
   }
 
+  /**
+   * Handle requests to get the current value of the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsGet() {
+    this.platform.log.debug('Triggered GET TemperatureDisplayUnits');
+    // this has bot been impimented
+    return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+  }
+
+  /**
+   * Handle requests to set the "Temperature Display Units" characteristic
+   */
+  handleTemperatureDisplayUnitsSet(value) {
+    this.platform.log.debug('Triggered SET TemperatureDisplayUnits:', value);
+  }
 }
 
 
