@@ -11,6 +11,7 @@ import { ExampleHomebridgePlatform } from './platform';
  */
 export class EsceaFirePlatformAccessory {
   private service: Service;
+  private tempService: Service;
 
   private exampleStates = {
     On: false,
@@ -44,6 +45,10 @@ export class EsceaFirePlatformAccessory {
     this.service = this.accessory.getService(this.platform.Service.Thermostat) ||
     this.accessory.addService(this.platform.Service.Thermostat);
 
+    // add a second temperature sensort service. The reason for this is that it allows you to
+    // use the temperature sensor along with automations to turn the fire on.
+    this.tempService = this.accessory.getService(this.platform.Service.TemperatureSensor) ||
+    this.accessory.addService(this.platform.Service.TemperatureSensor);
 
     // create the fire
     this.fire = new Fire(this.ipAddress);
@@ -53,11 +58,10 @@ export class EsceaFirePlatformAccessory {
     this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
 
     // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
+    // see https://developers.homebridge.io/#/service/Thermostat
 
 
     // create handlers for required characteristics
-
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this))
       .onSet(this.handleCurrentHeatingCoolingStateSet.bind(this));
@@ -70,15 +74,22 @@ export class EsceaFirePlatformAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(this.handleCurrentTemperatureGet.bind(this));
 
+
+    this.tempService.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(this.handleTargetTemperatureGet.bind(this));
+
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(this.handleTargetTemperatureGet.bind(this))
       .onSet(this.handleTargetTemperatureSet.bind(this));
 
+
+    // nothing has been done with changing display units but it is required
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this))
       .onSet(this.handleTemperatureDisplayUnitsSet.bind(this));
 
 
+    // we don't want the cooling options
     // https://github.com/homebridge/homebridge/issues/2239
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .setProps({
@@ -132,6 +143,7 @@ export class EsceaFirePlatformAccessory {
       // room temp
       this.exampleStates.CurrentTemperature = status.roomTemp;
       this.service.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, status.roomTemp);
+      this.tempService.updateCharacteristic(this.platform.Characteristic.CurrentTemperature, status.roomTemp);
 
     });
 
@@ -208,6 +220,7 @@ export class EsceaFirePlatformAccessory {
    */
   handleTemperatureDisplayUnitsGet() {
     this.platform.log.debug('Triggered GET TemperatureDisplayUnits');
+    // this has bot been impimented
     return this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
   }
 

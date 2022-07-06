@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-import { rejects } from 'node:assert';
 import dgram from 'node:dgram';
 import { decimalToHexString, readBufferAsBool, readBufferAsInt } from './Util';
 
