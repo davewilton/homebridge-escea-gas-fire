@@ -13,16 +13,14 @@ export class Fire {
   private sendRequest(message: string): Promise<Buffer> {
 
     return new Promise((resolve, reject) => {
-
       try {
 
         const server = dgram.createSocket('udp4');
 
-        server.on('message', (msg, rinfo) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        server.on('message', (msg) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const res: any = msg;
           const m = Buffer.from(res, 'hex');
-          console.log(`server got: ${msg.toString('hex')} from ${rinfo.address}:${rinfo.port}`);
           resolve(m);
           server.close();
         });
@@ -40,7 +38,6 @@ export class Fire {
   }
 
   getStatus(): Promise<FireStatus> {
-    console.log('getStatus');
     return new Promise((resolve, reject) => {
       const STATUS_PLEASE = '473100000000000000000000003146';
       this.sendRequest(STATUS_PLEASE).then((m) => {
@@ -53,7 +50,8 @@ export class Fire {
           readBufferAsInt(m, 8, 9),
         );
         resolve(status);
-      }, (e) => {
+      }, (e)=>{
+        console.error(e);
         reject(e);
       });
     });
@@ -64,8 +62,8 @@ export class Fire {
       const POWER_ON = '473900000000000000000000003146';
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
-      }, (e) => {
-        console.log(e);
+      }, (e)=>{
+        console.error(e);
         reject(false);
       });
     });
@@ -76,8 +74,8 @@ export class Fire {
       const POWER_ON = '473A00000000000000000000003146';
       this.sendRequest(POWER_ON).then(() => {
         resolve(true);
-      }, (e) => {
-        console.log(e);
+      }, (e)=>{
+        console.error(e);
         reject(false);
       });
     });
