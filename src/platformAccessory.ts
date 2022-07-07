@@ -131,6 +131,11 @@ export class EsceaFirePlatformAccessory {
           this.exampleStates.TargetHeatingCoolingState);
       }
 
+      if(this.exampleStates.CurrentHeatingCoolingState !== this.exampleStates.TargetHeatingCoolingState){
+        this.service.updateCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState,
+          this.exampleStates.TargetHeatingCoolingState);
+      }
+
       // could have been changed on the remote control/another app
       if(this.exampleStates.TargetTemperature !== status.desiredTemp){
         this.platform.log.debug('update TargetTemperature from fire ->', status.desiredTemp);
