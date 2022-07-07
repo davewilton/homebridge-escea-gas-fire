@@ -24,7 +24,6 @@ This accessory contains both the fire and a separate temperature sensor. The ide
 
 ![](images/Screenshot%202022-07-06%20at%205.52.45%20pm.png) 
 #
-![](images/Screenshot%202022-07-06%20at%206.16.13%20pm.png)
 
 # Developing
 
