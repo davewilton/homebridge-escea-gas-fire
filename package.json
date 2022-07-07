@@ -2,7 +2,7 @@
   "private": false,
   "displayName": "Escea Gas Fire",
   "name": "homebridge-escea-gas-fire",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Control an Escea Gas Fire via Homebridge",
   "license": "Apache-2.0",
   "repository": {
