@@ -12,8 +12,7 @@ You should enter the IP address of your fire and the name to give the fire. Plat
 
 ## Temperature sensor
 
-This accessory contains both the fire and a separate temperature sensor. This allows you to create automations in HomeKit based upon
-temperature and time.
+This accessory contains both the fire and a separate temperature sensor. The idea of this was to allow automations to be created using the temperature sensor however, for some reason this does not appear to work at present. Will update if I get it working
 
 ```
 {
@@ -26,8 +25,6 @@ temperature and time.
 ![](images/Screenshot%202022-07-06%20at%205.52.45%20pm.png) 
 #
 ![](images/Screenshot%202022-07-06%20at%206.16.13%20pm.png)
-#
-![](images/automation.gif)
 
 # Developing
 
