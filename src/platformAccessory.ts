@@ -207,10 +207,10 @@ export class EsceaFirePlatformAccessory {
   /**
    * Handle requests to set the "Target Temperature" characteristic
    */
-  handleTargetTemperatureSet(value) {
+  async handleTargetTemperatureSet(value) {
     this.platform.log.debug('Triggered SET TargetTemperature:', value);
     this.exampleStates.TargetTemperature = value;
-    this.fire.setTemp(this.exampleStates.TargetTemperature as number);
+    await this.fire.setTemp(this.exampleStates.TargetTemperature as number);
   }
 
   /**

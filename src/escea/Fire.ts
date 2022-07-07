@@ -5,6 +5,7 @@ import { decimalToHexString, readBufferAsBool, readBufferAsInt } from './Util';
 export class Fire {
 
   UDP_PORT = 3300;
+  server: dgram.Socket | undefined;
 
   constructor(public ip: string) {
     //
@@ -15,20 +16,29 @@ export class Fire {
     return new Promise((resolve, reject) => {
       try {
 
-        const server = dgram.createSocket('udp4');
+        if(!this.server){
+          this.server = dgram.createSocket('udp4');
 
-        server.on('message', (msg) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const res: any = msg;
-          const m = Buffer.from(res, 'hex');
-          resolve(m);
-          server.close();
-        });
+          this.server.on('message', (msg) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const res: any = msg;
+            const m = Buffer.from(res, 'hex');
+            resolve(m);
+          });
 
-        server.bind(this.UDP_PORT);
+          this.server.bind(this.UDP_PORT);
+
+          // close the server after 1 second
+          setTimeout(()=>{
+            if(this.server){
+              this.server.close();
+              this.server = undefined;
+            }
+          }, 1000);
+        }
 
         const m = Buffer.from(message, 'hex');
-        server.send(m, this.UDP_PORT, this.ip);
+        this.server.send(m, this.UDP_PORT, this.ip);
 
       } catch (error) {
         reject(error);
@@ -82,7 +92,6 @@ export class Fire {
   }
 
   setTemp(temp: number) {
-    console.log('set temp');
     temp = Math.ceil(temp); // must be an int
     return new Promise((resolve, reject) => {
       if (temp < 10 || temp > 31) {
