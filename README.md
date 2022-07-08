@@ -1,18 +1,23 @@
 
 
-# Control Your Escea Gas Fire
+# Control Your Escea Gas Fire From HomeKit
+
+## Homebridge 
+
+This is a plugin for Homebridge. See [here](https://homebridge.io/) for installation and more details. 
+
 
 ## Compatibility.
 
 I have so far only been able to test this with the DF700. However, the project on which it is base has tested the DX1500 DX1000
-DS1400 DF700) so it should work with those. Please let me know if you find it to be working on your model. Use at your own risk.
+DS1400 DF700) so it should work with those. Please let me know if you find it to be working on your model. 
+
+Use at your own risk.
+
+![](images/Screenshot%202022-07-06%20at%205.52.45%20pm.png) 
 
 ## Configuration. 
 You should enter the IP address of your fire and the name to give the fire. Platform should not need to be changed
-
-## Temperature sensor
-
-This accessory contains both the fire and a separate temperature sensor. The idea of this was to allow automations to be created using the temperature sensor however, for some reason this does not appear to work at present. Will update if I get it working
 
 ```
 {
@@ -22,8 +27,17 @@ This accessory contains both the fire and a separate temperature sensor. The ide
 }
 ```
 
-![](images/Screenshot%202022-07-06%20at%205.52.45%20pm.png) 
-#
+## Automation
+
+This accessory contains both the fire and a separate temperature sensor. The idea of this was to allow automations to be created using the temperature sensor, for example, at 6am if the temperature is less than 15C turn on the fire. Sadly this can't be done with HomeKit automations at the moment,
+because they will only check when the temperature drops below a certain point (not the temperature at a moment).
+
+However, you can get around this by creating a shortcut automation.
+
+This Automation checks if the phone on which it is run is at (street name) and turns on the fire if it is less than 16C. 
+
+![](images/Automation%2066832440-9B60-43E2-9701-F45BDEFA8B5C%20(1).png)
+
 
 # Developing
 
